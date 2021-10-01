@@ -1,0 +1,63 @@
+version: "3"
+
+services:
+  nagios-base:
+    image: jasonrivers/nagios:latest
+    environment:
+      - NAGIOSADMIN_USER=nagiosadmin
+      - NAGIOSAMDIN_PASS=nagios
+    mem_limit: 2G
+    mem_reservation: 1G
+    cpus: 2.00
+    container_name: nagios-base
+    tty: true
+    cap_add:
+      - ALL
+    privileged: true
+    volumes:
+      - ./volumes/all:/volumes/all
+      - ./volumes/nagios-server/etc:/opt/nagios/etc/
+    network_mode: host
+  
+  nagios-nginx:
+    image: nginx
+    container_name: nagios-nginx
+    ports:
+      - 8082:80
+
+  User2:
+    image: mcnaughton/centos-base
+    container_name: user2-10.9.0.2
+    stdin_open: true
+    hostname: user2
+    volumes:
+      - ./volumes/all:/volumes/all
+    networks:
+      net-10.9.0.0:
+        ipv4_address: 10.9.0.2
+    entrypoint: ["/bin/sh","-c"]
+    command:
+      - |
+        useradd nagios
+        usermod -aG wheel nagios
+        yum install epel-release -y
+        yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+        echo [*] Waiting for 10 Seconds Nagios Agent Installation to Complete.
+        sleep 12
+        yum install nrpe nagios-plugins-users nagios-plugins-load nagios-plugins-swap nagios-plugins-disk nagios-plugins-procs -y
+        echo [*] Attempting To Add This Nagios Instance to Monitoring Server.
+        sleep 12
+        sed 's/allowed_hosts=127.0.0.1,::1/allowed_hosts=127.0.0.1,10.9.0.1/' /etc/nagios/nrpe.cfg
+        systemctl restart nrpe
+        systemctl enable nrpe
+        /bin/bash
+
+
+
+
+networks:
+  net-10.9.0.0:
+    name: net-10.9.0.0
+    ipam:
+      config:
+        - subnet: 10.9.0.0/24
